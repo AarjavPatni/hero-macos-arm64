@@ -1,5 +1,12 @@
 FROM ros:noetic
 
+RUN apt-get update && apt-get install -y wget gnupg lsb-release && \
+    echo "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" > /etc/apt/sources.list.d/gazebo-stable.list && \
+    wget -O - https://packages.osrfoundation.org/gazebo.key | apt-key add - && \
+    apt-get update
+
+ARG DEBIAN_FRONTEND=noninteractive
+
 # install ros package
 RUN apt-get update && apt-get install -y \
       git \
@@ -25,10 +32,16 @@ RUN apt-get update && apt-get install -y \
       ros-${ROS_DISTRO}-image-proc \
       ros-${ROS_DISTRO}-camera-calibration \
       ros-${ROS_DISTRO}-teleop-twist-keyboard \
+      ros-${ROS_DISTRO}-gazebo-ros-pkgs \
       ros-${ROS_DISTRO}-gazebo-ros-pkgs \ 
       ros-${ROS_DISTRO}-gazebo-plugins \
-      ros-${ROS_DISTRO}-gazebo-ros-control && \
-    rm -rf /var/lib/apt/lists/*
+      gazebo11 libgazebo11-dev \
+      && apt-get install -y --no-install-recommends \
+    xfce4-session xfce4-panel xfce4-terminal xfce4-settings thunar \
+        tigervnc-standalone-server tigervnc-common \
+        novnc websockify \
+        x11-xserver-utils dbus-x11 xdg-utils x11-apps \
+      && rm -rf /var/lib/apt/lists/*
 
 # Booststrap workspace.
 ENV CATKIN_DIR=/catkin_ws
@@ -41,34 +54,37 @@ RUN mkdir -p $CATKIN_DIR/src \
 
 WORKDIR $CATKIN_DIR
 
-RUN cd $CATKIN_DIR/src \
-    && git clone --depth 1 --branch noetic-devel https://github.com/rezeck/rosserial.git \
-    && cd $CATKIN_DIR \
-    && /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash \
-    # && rosdep install --from-paths src --ignore-src -r -y \
-    && catkin build"
+# Re-add your clones (cleaned '\' lines)
+RUN bash -lc '\
+  cd $CATKIN_DIR/src && \
+  git clone --depth 1 --branch noetic-devel https://github.com/rezeck/rosserial.git && \
+  cd $CATKIN_DIR && source /opt/ros/${ROS_DISTRO}/setup.bash && catkin build \
+'
 
-# Before tf_prefix deprecation decision
-RUN cd $CATKIN_DIR/src \
-    && git clone https://github.com/ros-simulation/gazebo_ros_pkgs.git \
-    && cd gazebo_ros_pkgs \
-    && git checkout b0ed38f9ecedbe929340f5e8b0aa7a457248e015 \
-    && cd $CATKIN_DIR \
-    && /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash \
-    # && rosdep install --from-paths src --ignore-src -r -y \
-    && catkin build"    
+# AprilTag
+RUN bash -lc '\
+  cd $CATKIN_DIR/src && \
+  git clone https://github.com/AprilRobotics/apriltag.git && \
+  git clone https://github.com/AprilRobotics/apriltag_ros.git && \
+  cd $CATKIN_DIR && source /opt/ros/${ROS_DISTRO}/setup.bash && catkin build \
+'
 
-RUN cd $CATKIN_DIR/src \
-    && git clone https://github.com/AprilRobotics/apriltag.git \ 
-    && git clone https://github.com/AprilRobotics/apriltag_ros.git \ 
-    && cd $CATKIN_DIR \
-    && /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash \
-    # && rosdep install --from-paths src --ignore-src -r -y \
-    && catkin build" 
+# HeRo
+RUN bash -lc '\
+  cd $CATKIN_DIR/src && \
+  git clone --depth 1 --branch noetic-devel https://github.com/verlab/hero_common.git && \
+  cd $CATKIN_DIR && source /opt/ros/${ROS_DISTRO}/setup.bash && catkin build \
+'
 
-RUN cd $CATKIN_DIR/src \
-    && git clone --depth 1 --branch noetic-devel https://github.com/verlab/hero_common.git \
-    && cd $CATKIN_DIR \
-    && /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash \
-    # && rosdep install --from-paths src --ignore-src -r -y \
-    && catkin build"
+# --- VNC/NoVNC startup ---
+RUN mkdir -p /root/.vnc && \
+    printf "#!/usr/bin/env bash\n\
+vncserver -kill :1 >/dev/null 2>&1 || true\n\
+rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1\n\
+vncserver :1 -geometry 1600x900 -depth 24\n\
+/opt/novnc/utils/novnc_proxy --vnc localhost:5901 --listen 8080\n" > /usr/local/bin/start-vnc && \
+    chmod +x /usr/local/bin/start-vnc
+
+ENV DISPLAY=:1
+ENV QT_X11_NO_MITSHM=1
+WORKDIR /root
