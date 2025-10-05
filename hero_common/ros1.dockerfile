@@ -70,12 +70,8 @@ RUN bash -lc '\
   cd $CATKIN_DIR && source /opt/ros/${ROS_DISTRO}/setup.bash && catkin build \
 '
 
-# HeRo
-RUN bash -lc '\
-  cd $CATKIN_DIR/src && \
-  git clone --depth 1 --branch noetic-devel https://github.com/verlab/hero_common.git && \
-  cd $CATKIN_DIR && source /opt/ros/${ROS_DISTRO}/setup.bash && catkin build \
-'
+# HeRo packages will be mounted via docker-compose volumes
+# No need to clone here as they come from local filesystem
 
 # --- VNC/NoVNC startup ---
 RUN mkdir -p /root/.vnc && \
@@ -92,4 +88,20 @@ websockify --web=/usr/share/novnc 0.0.0.0:8080 localhost:5901\n" > /usr/local/bi
 
 ENV DISPLAY=:1
 ENV QT_X11_NO_MITSHM=1
+
+# Add desktop shortcuts for HeRo launchers
+COPY launch_env_spawn.sh /usr/local/bin/launch_env_spawn.sh
+COPY launch_gazebo_wizard.sh /usr/local/bin/launch_gazebo_wizard.sh
+RUN chmod +x /usr/local/bin/launch_env_spawn.sh /usr/local/bin/launch_gazebo_wizard.sh
+
+# Create Desktop directory and add shortcut files
+RUN mkdir -p /root/Desktop && \
+    # HeRo Environment Spawn shortcut
+    printf '[Desktop Entry]\nName=HeRo Environment Spawn\nComment=Launch env_spawn.launch - spawns arena_1 and 4 HeRo robots\nExec=xfce4-terminal -e "/usr/local/bin/launch_env_spawn.sh"\nIcon=applications-simulation\nTerminal=false\nType=Application\nCategories=Simulation;Science;\nStartupNotify=true\n' > /root/Desktop/HeRo_Environment_Spawn.desktop && \
+    # Gazebo Wizard shortcut
+    printf '[Desktop Entry]\nName=Gazebo Wizard\nComment=Launch gazebo_wizard.launch - Gazebo with HeRo world + wizard GUI\nExec=xfce4-terminal -e "/usr/local/bin/launch_gazebo_wizard.sh"\nIcon=applications-science\nTerminal=false\nType=Application\nCategories=Simulation;Science;\nStartupNotify=true\n' > /root/Desktop/Gazebo_Wizard.desktop && \
+    chmod +x /root/Desktop/*.desktop
+
+# Workspace will be built at runtime when packages are mounted via volumes
+
 WORKDIR /root
