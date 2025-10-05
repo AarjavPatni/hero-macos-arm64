@@ -26,7 +26,7 @@ services:
       - "8080:8080"   # noVNC in your browser (http://localhost:8080)
       - "5901:5901"   # optional: direct VNC client
     volumes:
-      - .:/catkin_ws  # mount your workspace into the container
+      - ../:/catkin_ws/src
     command: /usr/local/bin/start-vnc
 
   # Headless launcher (fast). Put your bringup or gzserver here.
@@ -48,6 +48,32 @@ services:
       true &&
       # Example headless sim (classic Gazebo server only):
       gazebo --verbose --server
+      "
+
+  # HeRo Gazebo Wizard - runs the gazebo_wizard.launch file
+  wizard:
+    build:
+      context: .
+      dockerfile: ros1.dockerfile
+    container_name: ros_noetic_wizard
+    depends_on:
+      - roscore
+    environment:
+      - DISPLAY=:1
+      - ROS_MASTER_URI=http://roscore:11311
+      - ROS_IP=wizard
+      - GAZEBO_MODEL_PATH=/catkin_ws/src/hero_gazebo/worlds/models
+    volumes:
+      - ../:/catkin_ws/src
+    working_dir: /catkin_ws
+    command: >
+      bash -lc "
+      source /opt/ros/noetic/setup.bash &&
+      cd /catkin_ws &&
+      rm -rf build devel logs &&
+      catkin build &&
+      source devel/setup.bash &&
+      roslaunch hero_gazebo gazebo_wizard.launch
       "
 
   # Optional: Foxglove/rviz-lite via rosbridge (for headless visualization)

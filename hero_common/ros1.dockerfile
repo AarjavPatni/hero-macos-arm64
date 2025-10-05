@@ -38,8 +38,9 @@ RUN apt-get update && apt-get install -y \
       gazebo11 libgazebo11-dev \
       && apt-get install -y --no-install-recommends \
     xfce4-session xfce4-panel xfce4-terminal xfce4-settings thunar \
+        xfwm4 xfdesktop4 \
         tigervnc-standalone-server tigervnc-common \
-        novnc websockify \
+        novnc websockify net-tools \
         x11-xserver-utils dbus-x11 xdg-utils x11-apps \
       && rm -rf /var/lib/apt/lists/*
 
@@ -78,11 +79,15 @@ RUN bash -lc '\
 
 # --- VNC/NoVNC startup ---
 RUN mkdir -p /root/.vnc && \
+    echo 'ros' | vncpasswd -f > /root/.vnc/passwd && \
+    chmod 600 /root/.vnc/passwd && \
+    printf '#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nstartxfce4 &\n' > /root/.vnc/xstartup && \
+    chmod +x /root/.vnc/xstartup && \
     printf "#!/usr/bin/env bash\n\
 vncserver -kill :1 >/dev/null 2>&1 || true\n\
 rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1\n\
 vncserver :1 -geometry 1600x900 -depth 24\n\
-/opt/novnc/utils/novnc_proxy --vnc localhost:5901 --listen 8080\n" > /usr/local/bin/start-vnc && \
+websockify --web=/usr/share/novnc 0.0.0.0:8080 localhost:5901\n" > /usr/local/bin/start-vnc && \
     chmod +x /usr/local/bin/start-vnc
 
 ENV DISPLAY=:1
